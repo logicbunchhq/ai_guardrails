@@ -37,6 +37,80 @@ Array of strings (e.g., [:string])
 
 Example invalid input
 
+```
+input = { name: 123, price: "abc", tags: ["electronics", 2] }
+success, errors = validator.validate(input)
+# errors => { name: ["must be a string"], price: ["must be a float"], tags: ["element 1 must be a string"] }
+
+
+```
+
+
+## Automatic JSON Repair
+
+LLM output often produces **malformed or partially invalid JSON**.
+`AiGuardrails::JsonRepair` attempts to **automatically repair common JSON issues** so you can safely parse AI responses into Ruby hashes.
+
+### What it fixes
+
+- Single quotes → double quotes (`'key': 'value'` → `"key": "value"`)
+- Missing quotes around keys (`key: "value"` → `"key": "value"`)
+- Missing commas between key-value pairs or objects
+- Trailing commas before `}` or `]`
+- Nested objects or arrays without commas
+- Consecutive objects in arrays without commas
+- Double braces (`{{ ... }}` → `{ ... }`)
+- Adjacent arrays without commas (`][` → `], [`)
+- Unbalanced/missing closing braces/brackets
+
+> ⚠️ Designed primarily for **AI-generated JSON**, not arbitrary invalid JSON.
+
+### Example Usage
+
+```ruby
+require "ai_guardrails"
+
+raw_json = "{name: 'Laptop' price: 1200, tags: ['electronics' 'sale']}"
+
+fixed = AiGuardrails::JsonRepair.repair(raw_json)
+
+puts fixed
+# => { "name" => "Laptop", "price" => 1200, "tags" => ["electronics", "sale"] }
+```
+
+Handling Unrepairable JSON
+
+If the input is completely invalid and cannot be fixed:
+
+```Ruby
+begin
+  AiGuardrails::JsonRepair.repair("THIS IS NOT JSON")
+rescue AiGuardrails::JsonRepair::RepairError => e
+  puts "Could not repair JSON: #{e.message}"
+end
+
+```
+
+Integration with Schema Validation
+
+You can combine JSON repair with AiGuardrails::SchemaValidator:
+
+```Ruby
+schema = { name: :string, price: :float, tags: [:string] }
+
+raw = "{name: 'Laptop' price: '1200', tags: ['electronics' 'sale']}"
+
+fixed_json = AiGuardrails::JsonRepair.repair(raw)
+
+validator = AiGuardrails::SchemaValidator.new(schema)
+success, result_or_errors = validator.validate(fixed_json)
+
+if success
+  puts "Validated output: #{result_or_errors}"
+else
+  puts "Schema errors: #{result_or_errors}"
+end
+```
 
 ## Installation
 

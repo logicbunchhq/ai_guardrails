@@ -38,6 +38,11 @@ background jobs, and scrapers. Think of it as Guardrails.AI for Ruby."
 
   # Uncomment to register a new dependency of your gem
   # spec.add_dependency "example-gem", "~> 1.0"
+
+  # Byebug is used for debugging during development and testing.
+  spec.add_dependency "byebug"
+
+  # Ensures input/output conforms to expected schema, improving reliability.
   spec.add_dependency "dry-validation", "~> 1.10"
 
   # For more information and examples about making a new gem, check out our

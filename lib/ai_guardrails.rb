@@ -2,6 +2,7 @@
 
 require_relative "ai_guardrails/version"
 require_relative "ai_guardrails/schema_validator"
+require_relative "ai_guardrails/json_repair"
 
 module AiGuardrails
   class Error < StandardError; end
