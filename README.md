@@ -148,6 +148,58 @@ end
 
 ```
 
+## Provider-Agnostic API
+
+AiGuardrails is built to work with **any** LLM provider — without forcing users to install provider-specific gems.
+
+By default, AiGuardrails ships with **zero vendor dependencies**.
+
+You install only the provider client you actually want to use.
+
+
+## Supported Providers
+
+| Provider | External Gem Required | Status |
+|---------|------------------------|--------|
+| OpenAI | `ruby-openai` | ✔ Supported |
+| Anthropic | `anthropic` | 🔜 Planned |
+| Google Gemini | `google-genai` | 🔜 Planned |
+| Groq | `groq` | 🔜 Planned |
+| Ollama (local) | none | 🔜 Planned |
+
+
+## How It Works
+
+AiGuardrails loads providers dynamically.
+
+When you call:
+
+```ruby
+client = AiGuardrails::Provider::Factory.build(provider: :openai, config: {...})
+
+
+### Example: OpenAI
+
+In your Gemfile:
+
+```ruby
+gem "ai_guardrails"
+gem "ruby-openai", require: false   # optional
+```
+
+```ruby
+client = AiGuardrails::Provider::Factory.build(
+  provider: :openai,
+  config: {
+    api_key: ENV["OPENAI_API_KEY"],
+    model: "gpt-4o-mini"
+  }
+)
+
+response = client.call_model(prompt: "Hello!")
+puts response
+```
+
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
