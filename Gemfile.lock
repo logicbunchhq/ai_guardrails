@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    ai_guardrails (0.1.0)
+    ai_guardrails (0.2.2)
       byebug
       dry-validation (~> 1.10)
 

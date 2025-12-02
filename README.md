@@ -112,6 +112,42 @@ else
 end
 ```
 
+## Unit Test Helpers / Mock Model Client
+
+`AiGuardrails::MockModelClient` allows you to simulate AI model responses for testing purposes.  
+You can define expected outputs without calling a real LLM API.
+
+### Example Usage
+
+```ruby
+require "ai_guardrails"
+
+mock_client = AiGuardrails::MockModelClient.new(
+  "Generate product" => '{"name": "Laptop", "price": 1200}'
+)
+
+response = mock_client.call(prompt: "Generate product")
+puts response
+# => '{"name": "Laptop", "price": 1200}'
+
+# Dynamically add new responses
+mock_client.add_response("Generate user", '{"name": "Alice", "email": "alice@example.com"}')
+puts mock_client.call(prompt: "Generate user")
+# => '{"name": "Alice", "email": "alice@example.com"}'
+```
+
+### Simulate API errors
+
+```ruby
+begin
+  mock_client.call(prompt: "Generate product", raise_error: true)
+rescue AiGuardrails::MockModelClient::MockError => e
+  puts e.message
+end
+# => "Simulated model error"
+
+```
+
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
