@@ -45,7 +45,6 @@ success, errors = validator.validate(input)
 
 ```
 
-
 ## Automatic JSON Repair
 
 LLM output often produces **malformed or partially invalid JSON**.
@@ -199,6 +198,35 @@ client = AiGuardrails::Provider::Factory.build(
 response = client.call_model(prompt: "Hello!")
 puts response
 ```
+
+## Auto-Correction / Retry Layer
+
+This feature ensures AI output is **valid JSON and matches your schema**.  
+It automatically repairs broken JSON and retries until schema validation passes.
+
+### Example Usage
+
+```ruby
+require "ai_guardrails"
+
+# Any provider (OpenAI, Anthropic, etc.)
+client = AiGuardrails::Provider::Factory.build(provider: :openai, config: { api_key: ENV["OPENAI_API_KEY"] })
+
+# Schema to validate output
+schema = { name: :string, price: :float }
+
+auto = AiGuardrails::AutoCorrection.new(provider: client, schema: schema, max_retries: 3)
+
+result = auto.call(prompt: "Generate product")
+puts result
+# => { "name" => "Laptop", "price" => 1200.0 }
+```
+
+## Notes:
+- Retries: Configurable via max_retries.
+- Sleep: You can set sleep_time between retries.
+- JSON Repair: Automatically fixes common JSON issues from LLM output.
+- Errors: Raises AiGuardrails::AutoCorrection::RetryLimitReached if valid output cannot be obtained.
 
 ## Installation
 

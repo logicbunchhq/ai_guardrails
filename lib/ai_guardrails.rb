@@ -7,6 +7,7 @@ require_relative "ai_guardrails/mock_model_client"
 require_relative "ai_guardrails/provider/base_client"
 require_relative "ai_guardrails/provider/openai_client"
 require_relative "ai_guardrails/provider/factory"
+require_relative "ai_guardrails/auto_correction"
 
 module AiGuardrails
   class Error < StandardError; end
