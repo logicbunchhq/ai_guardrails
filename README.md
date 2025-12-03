@@ -228,6 +228,37 @@ puts result
 - JSON Repair: Automatically fixes common JSON issues from LLM output.
 - Errors: Raises AiGuardrails::AutoCorrection::RetryLimitReached if valid output cannot be obtained.
 
+## Safety & Content Filters
+
+`AiGuardrails::SafetyFilter` helps detect unsafe or blocked content in AI outputs.
+
+### Example Usage
+
+```ruby
+require "ai_guardrails"
+
+# Create filter with blocked words or regex patterns
+filter = AiGuardrails::SafetyFilter.new(blocklist: ["badword", /forbidden/i])
+
+# Check content
+begin
+  filter.check!("This output contains badword")
+rescue AiGuardrails::SafetyFilter::UnsafeContentError => e
+  puts e.message
+end
+# => "Unsafe content detected: /badword/i"
+
+# Boolean check
+puts filter.safe?("All good")  # => true
+puts filter.safe?("forbidden text") # => false
+```
+
+### Notes
+
+- You can pass strings or regex patterns in blocklist.
+- Can be used standalone or integrated with AutoCorrection to filter AI outputs.
+- Raises UnsafeContentError for unsafe content, or use safe? for boolean checks.
+
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
