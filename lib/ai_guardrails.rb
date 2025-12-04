@@ -15,6 +15,7 @@ require_relative "ai_guardrails/auto_correction"
 require_relative "ai_guardrails/safety_filter"
 require_relative "ai_guardrails/logger"
 require_relative "ai_guardrails/runner"
+require_relative "ai_guardrails/dsl"
 
 # Main namespace for the AiGuardrails gem.
 module AiGuardrails

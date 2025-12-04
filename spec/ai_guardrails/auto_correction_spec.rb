@@ -6,14 +6,15 @@ require "spec_helper"
 class FakeProvider
   attr_reader :call_count
 
-  def initialize(responses)
+  # Default responses = [] so DSL can call FakeProvider.new with zero args
+  def initialize(responses = [])
     @responses = responses.dup
     @call_count = 0
   end
 
   def call_model(*)
     @call_count += 1
-    @responses.shift || '{"name": "Default", "price": 100}'
+    @responses.shift || '{"name": "Laptop", "price": 1200.0}'
   end
 end
 

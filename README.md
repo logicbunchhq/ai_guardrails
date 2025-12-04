@@ -259,6 +259,62 @@ puts filter.safe?("forbidden text") # => false
 - Can be used standalone or integrated with AutoCorrection to filter AI outputs.
 - Raises UnsafeContentError for unsafe content, or use safe? for boolean checks.
 
+## Easy DSL / Developer-Friendly API
+
+`AiGuardrails.run` provides a single method to handle AI requests with schema validation,
+auto-correction, JSON repair, safety filters, and logging.
+
+### Basic Usage
+
+```ruby
+require "ai_guardrails"
+
+schema = { name: :string, price: :float }
+
+result = AiGuardrails::DSL.run(
+  prompt: "Generate a product",
+  schema: schema
+)
+
+puts result
+# => { "name" => "Laptop", "price" => 1200.0 }
+```
+
+### Using a custom provider and API key
+
+```ruby
+result = AiGuardrails::DSL.run(
+  prompt: "Generate a product",
+  provider: :openai,
+  provider_config: { api_key: ENV["OPENAI_API_KEY"] },
+  schema: schema
+)
+```
+
+### Safety filter integration
+
+```ruby
+result = AiGuardrails::DSL.run(
+  prompt: "Generate a product",
+  schema: schema,
+  blocklist: ["Laptop", /Forbidden/i]
+)
+# Raises AiGuardrails::SafetyFilter::UnsafeContentError if blocked content is found
+```
+
+### Retry & Auto-Correction
+The DSL automatically retries invalid AI responses and repairs JSON.
+Configure retries:
+
+```ruby
+result = AiGuardrails::DSL.run(
+  prompt: "Generate product",
+  schema: schema,
+  max_retries: 5,
+  sleep_time: 1
+)
+```
+
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
