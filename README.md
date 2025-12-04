@@ -315,6 +315,39 @@ result = AiGuardrails::DSL.run(
 )
 ```
 
+## Background Job / CLI Friendly
+
+AiGuardrails can safely run in **Rails background jobs** (ActiveJob, Sidekiq) or **CLI scripts**.
+
+### Background Job Usage
+
+```ruby
+AiGuardrails::BackgroundJob.perform(logger: Rails.logger, debug: true) do
+  AiGuardrails::DSL.run(
+    prompt: "Generate product",
+    schema: { name: :string, price: :float }
+  )
+end
+```
+
+### CLI Usage
+```ruby
+AiGuardrails::CLI.run(debug: true) do
+  result = AiGuardrails::DSL.run(
+    prompt: "Generate product",
+    schema: { name: :string, price: :float }
+  )
+  puts result
+end
+
+```
+
+#### Features:
+- Handles logging and debug output
+- Captures errors and logs them
+- Restores previous logger/debug configuration after execution
+- Works in scripts, Rails jobs, Sidekiq, or any background processing
+
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
