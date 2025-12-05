@@ -13,7 +13,8 @@ class FakeProvider
 
   def call_model(*)
     @call_count += 1
-    @responses.shift || '{"name": "Laptop", "price": 1200.0}'
+    # Return a hash matching schema
+    @responses.shift || { "name" => "Laptop", "price" => 1200.0 }
   end
 end
 
@@ -31,17 +32,25 @@ RSpec.describe AiGuardrails::DSL do
   end
 
   it "raises error for unsafe content" do
+    # Disable cache to ensure SafetyFilter is triggered
+    AiGuardrails::Cache.enabled = false
+
+    fake_provider = FakeProvider.new([{ "name" => "Laptop", "price" => 1200.0 }])
+    allow(AiGuardrails::Provider::Factory).to receive(:build).and_return(fake_provider)
+
     expect do
-      described_class.run(
-        prompt: "Generate product",
-        schema: schema,
-        blocklist: ["Laptop"]
-      )
+      described_class.run(prompt: "Generate product", schema: schema, blocklist: ["laptop"])
     end.to raise_error(AiGuardrails::SafetyFilter::UnsafeContentError)
+
+    # Re-enable cache after test if needed
+    AiGuardrails::Cache.enabled = true
   end
 
   it "supports custom provider config" do
     expect(AiGuardrails::Provider::Factory).to receive(:build).with(provider: :openai, config: { api_key: "123" })
-    described_class.run(prompt: "hi", provider: :openai, provider_config: { api_key: "123" }, schema: schema)
+
+    described_class.run(
+      prompt: "hi", provider: :openai, provider_config: { api_key: "123" }, schema: schema
+    )
   end
 end

@@ -348,6 +348,51 @@ end
 - Restores previous logger/debug configuration after execution
 - Works in scripts, Rails jobs, Sidekiq, or any background processing
 
+
+## Optional Caching
+
+AiGuardrails supports caching AI responses for repeated prompts
+to reduce API calls and improve performance.
+
+### Configuration
+
+```ruby
+AiGuardrails::Cache.configure(enabled: true, store: Rails.cache, expires_in: 300)
+```
+
+### DSL Integration
+```ruby
+schema = { name: :string, price: :float }
+
+# First call generates and caches result
+result1 = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema)
+
+# Second call fetches from cache
+result2 = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema)
+
+puts result1 == result2 # => true
+```
+
+### Fetch Examples
+```ruby
+key = AiGuardrails::Cache.key("prompt", schema)
+
+# Using default value
+value = AiGuardrails::Cache.fetch(key, "default_value")
+
+# Using block
+value = AiGuardrails::Cache.fetch(key) do
+  # generate value dynamically
+  "computed_result"
+end
+```
+
+### Notes
+- Default cache store is NullStore (no caching)
+- Cache key is generated from prompt + schema SHA256
+- Expiration can be configured with expires_in
+- Works with any object responding to read / write
+
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
