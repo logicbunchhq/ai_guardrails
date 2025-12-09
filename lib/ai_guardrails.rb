@@ -19,6 +19,7 @@ require_relative "ai_guardrails/dsl"
 require_relative "ai_guardrails/background_job"
 require_relative "ai_guardrails/cli"
 require_relative "ai_guardrails/cache"
+require_relative "ai_guardrails/auto_fix"
 
 # Main namespace for the AiGuardrails gem.
 module AiGuardrails

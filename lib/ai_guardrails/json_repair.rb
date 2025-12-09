@@ -19,21 +19,28 @@ module AiGuardrails
 
     # Main repair
     def repair
-      return JSON.parse(@raw) if valid_json?(@raw)
+      raw_sanitized = sanitize_llm_output(@raw) # move here
+      return JSON.parse(raw_sanitized) if valid_json?(raw_sanitized)
 
-      repaired = preprocess(@raw)
-      repaired = normalize_structure(repaired)
-      repaired = balance_braces(repaired)
-      repaired = run_recursive_fixes(repaired)
-      repaired = remove_trailing_commas(repaired)
-      repaired = repaired.gsub(/\s+/, " ").strip
-
+      repaired = run_full_repair(raw_sanitized)
       raise RepairError, "Unable to repair JSON" unless valid_json?(repaired)
 
       JSON.parse(repaired)
     end
 
     private
+
+    # --------------------------
+    # Full repair workflow extracted from original repair
+    # --------------------------
+    def run_full_repair(str)
+      str = preprocess(str)
+      str = normalize_structure(str)
+      str = balance_braces(str)
+      str = run_recursive_fixes(str)
+      str = remove_trailing_commas(str)
+      str.gsub(/\s+/, " ").strip
+    end
 
     # --------------------------
     # JSON validation
@@ -209,6 +216,18 @@ module AiGuardrails
       close_brackets = str.count("]")
 
       str + "}" * [open_braces - close_braces, 0].max + "]" * [open_brackets - close_brackets, 0].max
+    end
+
+    def sanitize_llm_output(str)
+      return str unless str.is_a?(String)
+
+      # Remove everything before the first ```json or ```
+      sanitized = str.sub(/\A.*?```(?:json)?\s*/m, "")
+
+      # Remove trailing ```
+      sanitized = sanitized.sub(/```\s*\z/, "")
+
+      sanitized.strip
     end
   end
   # rubocop:enable Metrics/ClassLength

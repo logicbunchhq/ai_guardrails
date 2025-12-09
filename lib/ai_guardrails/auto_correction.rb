@@ -17,32 +17,69 @@ module AiGuardrails
     end
 
     # Call the AI model with prompt
-    # Returns validated hash
+    # Returns validated hash (symbolized keys and correct types)
     # rubocop:disable Metrics/MethodLength
-    def call(prompt:)
+    def call(prompt:, schema_hint: nil)
       attempts = 0
+
+      # Append schema hint to prompt if provided
+      prompt = prepare_prompt(prompt, schema_hint)
 
       loop do
         attempts += 1
+
+        # Call AI provider
         raw_output = @provider.call_model(prompt: prompt)
 
-        # Try to repair JSON first
-        begin
-          repaired = JsonRepair.repair(raw_output)
-        rescue JsonRepair::RepairError
-          repaired = raw_output # if cannot repair, use raw
-        end
+        # Repair JSON if needed
+        input_for_validation = parse_and_repair(raw_output)
 
         # Validate against schema
-        valid, result = @validator.validate(repaired)
+        valid, result = @validator.validate(input_for_validation)
+        puts "valid: #{valid}, result: #{result.inspect}"
 
         return result if valid
 
+        # Raise error if max retries reached
         raise RetryLimitReached, "Max retries reached" if attempts >= @max_retries
 
+        # Log retry attempt
+        puts "[AiGuardrails] Attempt #{attempts}: Invalid output, retrying..."
         sleep @sleep_time
       end
     end
     # rubocop:enable Metrics/MethodLength
+
+    private
+
+    # Prepare prompt with schema hint if provided
+    def prepare_prompt(prompt, schema_hint)
+      return prompt unless schema_hint
+
+      "#{prompt}\n\nReturn only a valid JSON object matching this schema " \
+      "(no explanations, no formatting): #{schema_hint}"
+    end
+
+    # Parse and repair raw AI output
+    def parse_and_repair(raw_output)
+      repaired = repair_json(raw_output)
+      parse_json_or_empty(repaired)
+    end
+
+    # Attempt to repair JSON using JsonRepair
+    def repair_json(raw)
+      JsonRepair.repair(raw)
+    rescue JsonRepair::RepairError
+      raw
+    end
+
+    # Parse string JSON or return hash, fallback to empty hash
+    def parse_json_or_empty(input)
+      return input if input.is_a?(Hash)
+
+      JSON.parse(input)
+    rescue JSON::ParserError
+      {}
+    end
   end
 end

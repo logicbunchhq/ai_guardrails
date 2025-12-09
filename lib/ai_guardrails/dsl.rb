@@ -4,13 +4,18 @@ module AiGuardrails
   # Provides a simple developer-friendly interface
   module DSL
     class << self
+      # Main entry point used by developers.
       # Run AI model with validation, retries, and safety checks.
-      def run(prompt:, schema:, **options)
+      def run(prompt:, schema:, schema_hint: nil, **options)
         Cache.fetch(Cache.key(prompt, schema)) do
-          result = run_with_retries(
-            build_client(options.fetch(:provider, :openai), options.fetch(:provider_config, {})),
-            schema, prompt, options.fetch(:max_retries, 3), options.fetch(:sleep_time, 0)
-          )
+          result = fetch_with_retries_and_correction(prompt, schema, schema_hint, options)
+
+          puts "result in DSL: #{result}"
+
+          # Apply JSON + schema auto-fix when hooks are given.
+          hooks = options.fetch(:auto_fix_hooks, [])
+          fix_schema = schema_hint || schema
+          result = apply_auto_fix(result, fix_schema, hooks) unless hooks.empty?
 
           check_safety(result, options.fetch(:blocklist, []))
           result
@@ -19,23 +24,45 @@ module AiGuardrails
 
       private
 
+      # Extracted to reduce run method length
+      def fetch_with_retries_and_correction(prompt, schema, schema_hint, options)
+        client = build_client(options.fetch(:provider, :openai), options.fetch(:provider_config, {}))
+        max_retries = options.fetch(:max_retries, 3)
+        sleep_time = options.fetch(:sleep_time, 0)
+        run_with_retries_helper(
+          client: client, schema: schema, prompt: prompt,
+          max_retries: max_retries,
+          sleep_time: sleep_time,
+          schema_hint: schema_hint
+        )
+      end
+
       # Builds the provider client
       def build_client(provider, config)
         Provider::Factory.build(provider: provider, config: config)
       end
 
-      # Runs AutoCorrection wrapper
-      def run_with_retries(client, schema, prompt, max_retries, sleep_time)
+      # Runs AutoCorrection wrapper (max 5 parameters)
+      def run_with_retries_helper(options = {})
+        client      = options[:client]
+        schema      = options[:schema]
+        prompt      = options[:prompt]
+        max_retries = options[:max_retries] || 3
+        sleep_time  = options[:sleep_time] || 0
+        schema_hint = options[:schema_hint]
+
         auto = AutoCorrection.new(
-          provider: client,
-          schema: schema,
-          max_retries: max_retries,
-          sleep_time: sleep_time
+          provider: client, schema: schema, max_retries: max_retries, sleep_time: sleep_time
         )
-        auto.call(prompt: prompt)
+        auto.call(prompt: prompt, schema_hint: schema_hint)
       end
 
       # Applies blocklist filtering when needed
+      def apply_auto_fix(result, schema, hooks)
+        AiGuardrails::AutoFix.fix(result, schema: schema, hooks: hooks)
+      end
+
+      # Runs safety filter when needed.
       def check_safety(result, blocklist)
         return if blocklist.empty?
 
@@ -43,6 +70,7 @@ module AiGuardrails
         check_blocklist(content, blocklist)
       end
 
+      # Normalizes result into a simple string for safety scanning.
       def normalize_result(result)
         case result
         when Hash

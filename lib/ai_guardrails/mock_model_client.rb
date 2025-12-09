@@ -14,7 +14,9 @@ module AiGuardrails
     # Options can include:
     # - prompt: string
     # - raise_error: boolean to simulate API failure
-    def call(prompt:, raise_error: false)
+    def call(prompt:, raise_error: false, default_fallback: nil)
+      return default_fallback if raise_error == false && !@responses.key?(prompt.to_s)
+
       raise MockError, "Simulated model error" if raise_error
 
       response = @responses[prompt.to_s]
