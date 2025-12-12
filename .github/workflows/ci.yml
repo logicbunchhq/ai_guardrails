@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        ruby-version: [3.3.5]  # Match your local dev Ruby
+
+    steps:
+      # Checkout repo
+      - uses: actions/checkout@v3
+
+      # Setup Ruby + Bundler cache
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby-version }}
+          bundler-cache: true
+          bundler-version: 4.0.1  # optional, match your local Bundler
+
+      # Show Ruby & Bundler versions for debugging
+      - run: ruby -v
+      - run: bundle -v
+
+      # Install dependencies
+      - run: bundle install
+
+      # Run Rubocop
+      - run: bundle exec rubocop
+
+      # Run RSpec with SimpleCov
+      - run: bundle exec rspec
+
+      # Optional: Upload coverage to Coveralls
+      - uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

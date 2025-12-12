@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module AiGuardrails
-  VERSION = "0.2.2"
+  VERSION = "1.2.0"
 end

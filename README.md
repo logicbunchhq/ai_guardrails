@@ -1,21 +1,131 @@
 # AiGuardrails
 
-AI Guardrails is a Ruby gem for validating AI-generated outputs against schemas.
+[![Gem Version](https://img.shields.io/gem/v/ai_guardrails.svg)](https://rubygems.org/gems/ai_guardrails)
+[![Build Status](https://github.com/logicbunchhq/ai_guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/logicbunchhq/ai_guardrails/actions)
+[![Coverage Status](https://coveralls.io/repos/github/logicbunchhq/ai_guardrails/badge.svg?branch=main)](https://coveralls.io/github/logicbunchhq/ai_guardrails?branch=main)
 
+> **AiGuardrails** is a Ruby gem for validating, repairing, and securing AI-generated outputs.
+> It ensures responses from LLMs (like OpenAI or Anthropic) are **valid, safe, and structured**.
 
-## Schema Validation
+---
 
-You can define a simple schema and validate AI output:
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Features](#features)
+
+   * [Schema Validation](#schema-validation)
+   * [Automatic JSON Repair](#automatic-json-repair)
+   * [Unit Test Helpers / Mock Model Client](#unit-test-helpers--mock-model-client)
+   * [Provider-Agnostic API](#provider-agnostic-api)
+   * [Auto-Correction / Retry Layer](#auto-correction--retry-layer)
+   * [Safety & Content Filters](#safety--content-filters)
+   * [Easy DSL / Developer-Friendly API](#easy-dsl--developer-friendly-api)
+   * [Background Job / CLI Friendly](#background-job--cli-friendly)
+   * [Optional Caching](#optional-caching)
+   * [JSON + Schema Auto-Fix Hooks](#json--schema-auto-fix-hooks)
+5. [Error Handling](#error-handling)
+6. [Development](#development)
+7. [Contributing](#contributing)
+8. [License](#license)
+9. [Code of Conduct](#code-of-conduct)
+
+---
+
+## Overview
+
+AI models often generate invalid JSON, inconsistent data types, or unsafe content.
+**AiGuardrails** helps you handle all of this automatically, providing:
+
+* ✅ JSON repair for malformed AI responses
+* ✅ Schema validation for predictable structure
+* ✅ Safety filters for blocked or harmful content
+* ✅ Retry + correction for invalid responses
+* ✅ Easy integration via a single `AiGuardrails.run` call
+
+---
+
+```mermaid
+flowchart LR
+    A[AI Response] --> B[JSON Parse Attempt]
+    B -->|Valid| F[Return Output ✅]
+    B -->|Invalid| C[Auto-Fix Hook 🔧]
+    C --> D[Revalidate Schema]
+    D -->|Fixed| F
+    D -->|Still Invalid| E[Retry or Fallback 🚨]
+    E --> G[Raise AiGuardrails::SchemaError]
+```
+
+---
+
+## Installation
+
+Add AiGuardrails to your project using Bundler:
+
+```bash
+bundle add ai_guardrails
+```
+
+Or install manually:
+
+```bash
+gem install ai_guardrails
+```
+
+---
+
+## Requirements
+
+- Ruby >= 3.0.0
+- Rails >= 6.0 (if using Rails integration)
+- Optional dependencies:
+  - `ruby-openai` for OpenAI provider
+  - `ruby-anthropic` gem if using Anthropic provider
+
+---
+
+## Quick Start
+
+```ruby
+require "ai_guardrails"
+
+schema = { name: :string, price: :float }
+
+# Optional: Helps AI return structured output matching the schema.
+# Can be any type: String, Hash, etc.
+schema_hint = schema
+
+result = AiGuardrails::DSL.run(
+  prompt: "Generate a product JSON",
+  provider: :openai,
+  provider_config: { api_key: ENV["OPENAI_API_KEY"] },
+  schema: schema,
+  schema_hint: schema_hint
+)
+
+puts result
+# => { "name" => "Laptop", "price" => 1200.0 }
+```
+
+---
+
+## Features
+
+### Schema Validation
+
+Validate AI output against a Ruby schema.
 
 ```ruby
 require "ai_guardrails"
 
 schema = { name: :string, price: :float, tags: [:string] }
-validator = AIGuardrails::SchemaValidator.new(schema)
+validator = AiGuardrails::SchemaValidator.new(schema)
 
 input = { name: "Laptop", price: 1200.0, tags: ["electronics", "sale"] }
-
 success, result = validator.validate(input)
+
 if success
   puts "Valid output: #{result}"
 else
@@ -23,104 +133,76 @@ else
 end
 ```
 
-Supported types
+#### Supported Types
 
-:string
+| Type                 | Example                |
+| -------------------- | ---------------------- |
+| `:string`            | `"Laptop"`             |
+| `:integer`           | `42`                   |
+| `:float`             | `19.99`                |
+| `:boolean`           | `true`                 |
+| `[:string]`          | `["a", "b"]`           |
+| `[{ key: :string }]` | `[{"key" => "value"}]` |
 
-:integer
+#### Example Invalid Input
 
-:float
-
-:boolean
-
-Array of strings (e.g., [:string])
-
-Example invalid input
-
-```
+```ruby
 input = { name: 123, price: "abc", tags: ["electronics", 2] }
 success, errors = validator.validate(input)
-# errors => { name: ["must be a string"], price: ["must be a float"], tags: ["element 1 must be a string"] }
-
-
+# => { name: ["must be a string"], price: ["must be a float"], tags: ["element 1 must be a string"] }
 ```
 
-## Automatic JSON Repair
+---
 
-LLM output often produces **malformed or partially invalid JSON**.
-`AiGuardrails::JsonRepair` attempts to **automatically repair common JSON issues** so you can safely parse AI responses into Ruby hashes.
+### Automatic JSON Repair
 
-### What it fixes
-
-- Single quotes → double quotes (`'key': 'value'` → `"key": "value"`)
-- Missing quotes around keys (`key: "value"` → `"key": "value"`)
-- Missing commas between key-value pairs or objects
-- Trailing commas before `}` or `]`
-- Nested objects or arrays without commas
-- Consecutive objects in arrays without commas
-- Double braces (`{{ ... }}` → `{ ... }`)
-- Adjacent arrays without commas (`][` → `], [`)
-- Unbalanced/missing closing braces/brackets
-
-> ⚠️ Designed primarily for **AI-generated JSON**, not arbitrary invalid JSON.
-
-### Example Usage
+LLMs often return invalid JSON.
+`AiGuardrails::JsonRepair` automatically fixes common issues.
 
 ```ruby
 require "ai_guardrails"
 
 raw_json = "{name: 'Laptop' price: 1200, tags: ['electronics' 'sale']}"
-
 fixed = AiGuardrails::JsonRepair.repair(raw_json)
 
 puts fixed
 # => { "name" => "Laptop", "price" => 1200, "tags" => ["electronics", "sale"] }
 ```
 
-Handling Unrepairable JSON
+**What It Fixes**
 
-If the input is completely invalid and cannot be fixed:
+* Missing quotes or commas
+* Single → double quotes
+* Trailing commas
+* Unbalanced braces/brackets
+* Nested arrays/objects without separators
 
-```Ruby
+**Unrepairable JSON Example**
+
+```ruby
 begin
-  AiGuardrails::JsonRepair.repair("THIS IS NOT JSON")
+  AiGuardrails::JsonRepair.repair("NOT JSON")
 rescue AiGuardrails::JsonRepair::RepairError => e
   puts "Could not repair JSON: #{e.message}"
 end
-
 ```
 
-Integration with Schema Validation
-
-You can combine JSON repair with AiGuardrails::SchemaValidator:
-
-```Ruby
-schema = { name: :string, price: :float, tags: [:string] }
-
-raw = "{name: 'Laptop' price: '1200', tags: ['electronics' 'sale']}"
-
-fixed_json = AiGuardrails::JsonRepair.repair(raw)
-
-validator = AiGuardrails::SchemaValidator.new(schema)
-success, result_or_errors = validator.validate(fixed_json)
-
-if success
-  puts "Validated output: #{result_or_errors}"
-else
-  puts "Schema errors: #{result_or_errors}"
-end
-```
-
-## Unit Test Helpers / Mock Model Client
-
-`AiGuardrails::MockModelClient` allows you to simulate AI model responses for testing purposes.  
-You can define expected outputs without calling a real LLM API.
-
-### Example Usage
+**Integration with Schema Validation**
 
 ```ruby
-require "ai_guardrails"
+schema = { name: :string, price: :float }
+fixed = AiGuardrails::JsonRepair.repair("{name: 'Laptop', price: '1200'}")
+validator = AiGuardrails::SchemaValidator.new(schema)
+success, result = validator.validate(fixed)
+```
 
+---
+
+### Unit Test Helpers / Mock Model Client
+
+Simulate AI model responses for testing without API calls.
+
+```ruby
 mock_client = AiGuardrails::MockModelClient.new(
   "Generate product" => '{"name": "Laptop", "price": 1200}'
 )
@@ -129,300 +211,318 @@ response = mock_client.call(prompt: "Generate product")
 puts response
 # => '{"name": "Laptop", "price": 1200}'
 
-# Dynamically add new responses
-mock_client.add_response("Generate user", '{"name": "Alice", "email": "alice@example.com"}')
-puts mock_client.call(prompt: "Generate user")
-# => '{"name": "Alice", "email": "alice@example.com"}'
+mock_client.add_response("Generate user", '{"name": "Alice"}')
 ```
 
-### Simulate API errors
+**Simulate API Errors**
 
 ```ruby
 begin
-  mock_client.call(prompt: "Generate product", raise_error: true)
+  mock_client.call(prompt: "error", raise_error: true)
 rescue AiGuardrails::MockModelClient::MockError => e
   puts e.message
 end
-# => "Simulated model error"
-
 ```
 
-## Provider-Agnostic API
-
-AiGuardrails is built to work with **any** LLM provider — without forcing users to install provider-specific gems.
-
-By default, AiGuardrails ships with **zero vendor dependencies**.
-
-You install only the provider client you actually want to use.
-
-
-## Supported Providers
-
-| Provider | External Gem Required | Status |
-|---------|------------------------|--------|
-| OpenAI | `ruby-openai` | ✔ Supported |
-| Anthropic | `anthropic` | 🔜 Planned |
-| Google Gemini | `google-genai` | 🔜 Planned |
-| Groq | `groq` | 🔜 Planned |
-| Ollama (local) | none | 🔜 Planned |
-
-
-## How It Works
-
-AiGuardrails loads providers dynamically.
-
-When you call:
+**Fallback Example**
 
 ```ruby
-client = AiGuardrails::Provider::Factory.build(provider: :openai, config: {...})
-
-
-### Example: OpenAI
-
-In your Gemfile:
-
-```ruby
-gem "ai_guardrails"
-gem "ruby-openai", require: false   # optional
+response = mock_client.call(prompt: "error", default_fallback: "No mock response defined")
+puts response
+# => "No mock response defined"
 ```
+
+---
+
+### Provider-Agnostic API
+
+AiGuardrails supports **any LLM provider**, with dynamic loading and zero vendor dependencies.
+
+| Provider       | Gem              | Status      |
+| -------------- | ---------------- | ----------- |
+| OpenAI         | `ruby-openai`    | ✅ Supported |
+| Anthropic      | `ruby-anthropic` | 🔜 Planned  |
+| Google Gemini  | `gemini-ai`      | 🔜 Planned  |
+| Ollama (local) | `ollama-ai`      | 🔜 Planned  |
 
 ```ruby
 client = AiGuardrails::Provider::Factory.build(
   provider: :openai,
-  config: {
-    api_key: ENV["OPENAI_API_KEY"],
-    model: "gpt-4o-mini"
-  }
+  config: { api_key: ENV["OPENAI_API_KEY"], model: "gpt-4o-mini" }
 )
 
-response = client.call_model(prompt: "Hello!")
-puts response
+puts client.call_model(prompt: "Hello!")
 ```
 
-## Auto-Correction / Retry Layer
+---
 
-This feature ensures AI output is **valid JSON and matches your schema**.  
-It automatically repairs broken JSON and retries until schema validation passes.
+### Auto-Correction / Retry Layer
 
-### Example Usage
+Automatically repairs and retries AI output until it passes schema validation.
 
 ```ruby
-require "ai_guardrails"
-
-# Any provider (OpenAI, Anthropic, etc.)
-client = AiGuardrails::Provider::Factory.build(provider: :openai, config: { api_key: ENV["OPENAI_API_KEY"] })
-
-# Schema to validate output
 schema = { name: :string, price: :float }
 
-auto = AiGuardrails::AutoCorrection.new(provider: client, schema: schema, max_retries: 3)
+client = AiGuardrails::Provider::Factory.build(
+  provider: :openai,
+  config: { api_key: ENV["OPENAI_API_KEY"] }
+)
 
-result = auto.call(prompt: "Generate product")
+auto = AiGuardrails::AutoCorrection.new(provider: client, schema: schema, max_retries: 3, sleep_time: 1)
+
+result = auto.call(prompt: "Generate a product JSON", schema_hint: schema)
 puts result
 # => { "name" => "Laptop", "price" => 1200.0 }
 ```
 
-## Notes:
-- Retries: Configurable via max_retries.
-- Sleep: You can set sleep_time between retries.
-- JSON Repair: Automatically fixes common JSON issues from LLM output.
-- Errors: Raises AiGuardrails::AutoCorrection::RetryLimitReached if valid output cannot be obtained.
+**Optional Parameters**
 
-## Safety & Content Filters
+* `max_retries`: Maximum retry attempts
+* `sleep_time`: Delay between retries
+* `schema_hint`: Optional guide to help AI produce valid output
+* Raises `AiGuardrails::AutoCorrection::RetryLimitReached` if retries exhausted
 
-`AiGuardrails::SafetyFilter` helps detect unsafe or blocked content in AI outputs.
+---
 
-### Example Usage
+### Safety & Content Filters
+
+Detect and block unsafe or prohibited content.
 
 ```ruby
-require "ai_guardrails"
-
-# Create filter with blocked words or regex patterns
 filter = AiGuardrails::SafetyFilter.new(blocklist: ["badword", /forbidden/i])
 
-# Check content
+filter.safe?("clean text") # => true
+filter.safe?("badword inside") # => false
+```
+
+Raise exception on violation:
+
+```ruby
 begin
-  filter.check!("This output contains badword")
+  filter.check!("This has badword")
 rescue AiGuardrails::SafetyFilter::UnsafeContentError => e
   puts e.message
 end
-# => "Unsafe content detected: /badword/i"
-
-# Boolean check
-puts filter.safe?("All good")  # => true
-puts filter.safe?("forbidden text") # => false
 ```
 
-### Notes
+---
 
-- You can pass strings or regex patterns in blocklist.
-- Can be used standalone or integrated with AutoCorrection to filter AI outputs.
-- Raises UnsafeContentError for unsafe content, or use safe? for boolean checks.
+### Easy DSL / Developer-Friendly API
 
-## Easy DSL / Developer-Friendly API
+`AiGuardrails::DSL.run` is a single entry point combining:
 
-`AiGuardrails.run` provides a single method to handle AI requests with schema validation,
-auto-correction, JSON repair, safety filters, and logging.
-
-### Basic Usage
-
-```ruby
-require "ai_guardrails"
-
-schema = { name: :string, price: :float }
-
-result = AiGuardrails::DSL.run(
-  prompt: "Generate a product",
-  schema: schema
-)
-
-puts result
-# => { "name" => "Laptop", "price" => 1200.0 }
-```
-
-### Using a custom provider and API key
-
-```ruby
-result = AiGuardrails::DSL.run(
-  prompt: "Generate a product",
-  provider: :openai,
-  provider_config: { api_key: ENV["OPENAI_API_KEY"] },
-  schema: schema
-)
-```
-
-### Safety filter integration
-
-```ruby
-result = AiGuardrails::DSL.run(
-  prompt: "Generate a product",
-  schema: schema,
-  blocklist: ["Laptop", /Forbidden/i]
-)
-# Raises AiGuardrails::SafetyFilter::UnsafeContentError if blocked content is found
-```
-
-### Retry & Auto-Correction
-The DSL automatically retries invalid AI responses and repairs JSON.
-Configure retries:
+* JSON repair
+* Schema validation
+* Auto-correction & retries
+* Safety filters
+* Logging & debugging
+* Optional caching
 
 ```ruby
 result = AiGuardrails::DSL.run(
   prompt: "Generate product",
-  schema: schema,
-  max_retries: 5,
-  sleep_time: 1
+  schema: { name: :string, price: :float },
+  schema_hint: schema, # It could be any other data type eg, string, json etc
+  provider: :openai,
+  provider_config: { api_key: ENV["OPENAI_API_KEY"] },
+  blocklist: ["Forbidden"]
 )
+
+puts result
+# => { "name" => "Laptop", "price" => 1200.0 }
 ```
 
-## Background Job / CLI Friendly
+**Schema vs Schema Hint**
 
-AiGuardrails can safely run in **Rails background jobs** (ActiveJob, Sidekiq) or **CLI scripts**.
-
-### Background Job Usage
+* `schema` (required): Full validation for final output.
+* `schema_hint` (optional): Guides AI generation, can be a subset or modified version.
 
 ```ruby
-AiGuardrails::BackgroundJob.perform(logger: Rails.logger, debug: true) do
+schema = { name: :string, price: :float, tags: [:string] }
+hint = "JSON should contain name, price and tags"
+
+result = AiGuardrails::DSL.run(
+  prompt: "Generate product JSON",
+  schema: schema,
+  schema_hint: hint,
+  provider_config: { api_key: ENV["OPENAI_API_KEY"] },
+  blocklist: ["Forbidden"],
+  max_retries: 3,
+  sleep_time: 1
+)
+
+puts result
+# => { "name" => "Laptop", "price" => 1200.0, "tags" => ["electronics", "sale"] }
+```
+
+---
+
+### Background Job / CLI Friendly
+
+Works seamlessly in Rails background jobs, Sidekiq, or standalone CLI scripts.
+
+**Background Job Example**
+
+```ruby
+require "logger"
+
+logger = Logger.new($stdout)
+
+AiGuardrails::BackgroundJob.perform(logger: logger, debug: true) do
   AiGuardrails::DSL.run(
     prompt: "Generate product",
-    schema: { name: :string, price: :float }
+    schema: { name: :string, price: :float },
+    schema_hint: { name: :string, price: :float },
+    provider_config: { api_key: ENV["OPENAI_API_KEY"] }
   )
 end
 ```
 
-### CLI Usage
+**CLI Example (Standalone Script or IRB)**
+Use the CLI for running workflows outside of Rails or for local testing.
+
 ```ruby
+# If running as a standalone Ruby script, make sure the gem lib path is loaded:
+$LOAD_PATH.unshift(File.expand_path("lib", __dir__))
+require "ai_guardrails"
+
 AiGuardrails::CLI.run(debug: true) do
   result = AiGuardrails::DSL.run(
     prompt: "Generate product",
-    schema: { name: :string, price: :float }
+    schema: { name: :string, value: :integer },
+    schema_hint: { name: :string, value: :integer },
+    provider_config: { api_key: ENV["OPENAI_API_KEY"] }
   )
+
   puts result
 end
 
 ```
+---
 
-#### Features:
-- Handles logging and debug output
-- Captures errors and logs them
-- Restores previous logger/debug configuration after execution
-- Works in scripts, Rails jobs, Sidekiq, or any background processing
+**Note**: End-users of the gem in Rails projects do not need the CLI. It is primarily for gem developers or for running workflows outside a Rails app.
 
+### Optional Caching
 
-## Optional Caching
-
-AiGuardrails supports caching AI responses for repeated prompts
-to reduce API calls and improve performance.
-
-### Configuration
+Cache AI responses for repeated prompts to reduce cost and latency.
 
 ```ruby
 AiGuardrails::Cache.configure(enabled: true, store: Rails.cache, expires_in: 300)
-```
 
-### DSL Integration
-```ruby
 schema = { name: :string, price: :float }
 
-# First call generates and caches result
-result1 = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema)
-
-# Second call fetches from cache
-result2 = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema)
+result1 = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema, schema_hint: schema, provider_config: { api_key: ENV["OPENAI_API_KEY"] })
+result2 = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema, schema_hint: schema, provider_config: { api_key: ENV["OPENAI_API_KEY"] })
 
 puts result1 == result2 # => true
 ```
 
-### Fetch Examples
+**Fetch Examples**
+
 ```ruby
 key = AiGuardrails::Cache.key("prompt", schema)
 
-# Using default value
+# Using default
 value = AiGuardrails::Cache.fetch(key, "default_value")
 
 # Using block
-value = AiGuardrails::Cache.fetch(key) do
-  # generate value dynamically
-  "computed_result"
+value = AiGuardrails::Cache.fetch(key) { "computed_result" }
+```
+
+---
+
+### JSON + Schema Auto-Fix Hooks
+
+Automatically repair and coerce malformed JSON to match schema.
+
+```ruby
+schema = { name: :string, price: :float, available: :boolean }
+raw = '{"name": "Shirt", "price": "19.99", "available": "true"}'
+
+fixed = AiGuardrails::AutoFix.fix(raw, schema: schema)
+# => {"name"=>"Shirt", "price"=>19.99, "available"=>true}
+```
+
+**Custom Hooks**
+
+```ruby
+hooks = [proc { |h| h["price"] *= 2 }]
+fixed = AiGuardrails::AutoFix.fix(raw, schema: schema, hooks: hooks)
+puts fixed["price"] # => 39.98
+```
+
+Hooks allow:
+
+* Setting **default values**
+* Transforming or normalizing data
+* Custom calculations or aggregations
+* Injecting metadata before final output
+
+Hooks run after schema validation and JSON repair, ensuring safe, valid, and tailored output.
+
+---
+
+## Error Handling
+
+| Exception                                         | When It Occurs                                  |
+| ------------------------------------------------- | ----------------------------------------------- |
+| `AiGuardrails::JsonRepair::RepairError`           | Cannot repair invalid JSON input                |
+| `AiGuardrails::AutoCorrection::RetryLimitReached` | Maximum retries reached without valid output    |
+| `AiGuardrails::SafetyFilter::UnsafeContentError`  | Blocked or unsafe content detected in AI output |
+
+Example:
+
+```ruby
+begin
+  result = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema)
+rescue AiGuardrails::AutoCorrection::RetryLimitReached => e
+  puts "Retries exceeded: #{e.message}"
+rescue AiGuardrails::SafetyFilter::UnsafeContentError => e
+  puts "Blocked content detected: #{e.message}"
 end
 ```
 
-### Notes
-- Default cache store is NullStore (no caching)
-- Cache key is generated from prompt + schema SHA256
-- Expiration can be configured with expires_in
-- Works with any object responding to read / write
-
-## Installation
-
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
-Install the gem and add to the application's Gemfile by executing:
-
-    $ bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
-
-If bundler is not being used to manage dependencies, install the gem by executing:
-
-    $ gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
-
-## Usage
-
-TODO: Write usage instructions here
+---
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+Install dependencies:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```bash
+bin/setup
+rake spec
+```
+
+Interactive console:
+
+```bash
+bin/console
+```
+
+Release a new version:
+
+```bash
+bundle exec rake release
+```
+
+---
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/ai_guardrails. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/ai_guardrails/blob/master/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome at:
+👉 [https://github.com/logicbunchhq/ai_guardrails](https://github.com/logicbunchhq/ai_guardrails)
+
+This project follows the [Contributor Covenant](https://www.contributor-covenant.org/).
+
+---
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+Released under the [MIT License](https://opensource.org/licenses/MIT).
+
+---
 
 ## Code of Conduct
 
-Everyone interacting in the AiGuardrails project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/ai_guardrails/blob/master/CODE_OF_CONDUCT.md).
+Everyone interacting with AiGuardrails project is expected to follow the
+[Code of Conduct](https://github.com/logicbunchhq/ai_guardrails/blob/master/CODE_OF_CONDUCT.md).
