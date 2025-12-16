@@ -10,8 +10,6 @@ module AiGuardrails
         Cache.fetch(Cache.key(prompt, schema)) do
           result = fetch_with_retries_and_correction(prompt, schema, schema_hint, options)
 
-          puts "result in DSL: #{result}"
-
           # Apply JSON + schema auto-fix when hooks are given.
           hooks = options.fetch(:auto_fix_hooks, [])
           fix_schema = schema_hint || schema

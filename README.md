@@ -5,7 +5,8 @@
 [![Coverage Status](https://coveralls.io/repos/github/logicbunchhq/ai_guardrails/badge.svg?branch=main)](https://coveralls.io/github/logicbunchhq/ai_guardrails?branch=main)
 
 > **AiGuardrails** is a Ruby gem for validating, repairing, and securing AI-generated outputs.
-> It ensures responses from LLMs (like OpenAI or Anthropic) are **valid, safe, and structured**.
+> It helps ensure responses from LLMs (like OpenAI or Anthropic) are **valid, safe, structured,
+> and suitable for production use**.
 
 ---
 
@@ -36,13 +37,16 @@
 
 ## Overview
 
-AI models often generate invalid JSON, inconsistent data types, or unsafe content.
-**AiGuardrails** helps you handle all of this automatically, providing:
+AI models often **hallucinate**, generate invalid JSON, return inconsistent data types,
+or produce unsafe or policy-violating content.
+
+**AiGuardrails** helps you **detect, constrain, and mitigate hallucinations at the output layer**
+by validating, repairing, filtering, and retrying AI-generated responses automatically.
 
 * ✅ JSON repair for malformed AI responses
-* ✅ Schema validation for predictable structure
+* ✅ Schema validation to constrain hallucinated fields and types
 * ✅ Safety filters for blocked or harmful content
-* ✅ Retry + correction for invalid responses
+* ✅ Retry + correction when hallucinated output fails validation
 * ✅ Easy integration via a single `AiGuardrails.run` call
 
 ---
@@ -91,14 +95,14 @@ gem install ai_guardrails
 ```ruby
 require "ai_guardrails"
 
-schema = { name: :string, price: :float }
+schema = { name: :string, price: :float, tags: [:string] }
 
 # Optional: Helps AI return structured output matching the schema.
 # Can be any type: String, Hash, etc.
-schema_hint = schema
+schema_hint = "JSON should include name, price, and tags"
 
 result = AiGuardrails::DSL.run(
-  prompt: "Generate a product JSON",
+  prompt: "Generate product JSON (it can be messy, that's okay)",
   provider: :openai,
   provider_config: { api_key: ENV["OPENAI_API_KEY"] },
   schema: schema,
@@ -106,7 +110,7 @@ result = AiGuardrails::DSL.run(
 )
 
 puts result
-# => { "name" => "Laptop", "price" => 1200.0 }
+# => { "name" => "Laptop", "price" => 1200.0, :tags=>["electronics", "computer" }
 ```
 
 ---
@@ -281,6 +285,24 @@ puts result
 * `sleep_time`: Delay between retries
 * `schema_hint`: Optional guide to help AI produce valid output
 * Raises `AiGuardrails::AutoCorrection::RetryLimitReached` if retries exhausted
+
+---
+
+### Hallucination Mitigation (Output-Level)
+
+LLMs may hallucinate fields, invent values, or return structurally incorrect data.
+AiGuardrails mitigates hallucinations at the **output level**, not by trusting the model,
+but by enforcing strict validation and correction rules.
+
+This includes:
+
+* Rejecting hallucinated fields not defined in the schema
+* Retrying when required fields are missing or invalid
+* Coercing types safely (e.g., `"19.99"` → `19.99`)
+* Blocking unsafe or fabricated content via safety filters
+
+AiGuardrails does not claim to eliminate hallucinations entirely,
+but it ensures **only valid, safe, and expected data reaches your application**.
 
 ---
 
@@ -474,7 +496,11 @@ Example:
 
 ```ruby
 begin
-  result = AiGuardrails::DSL.run(prompt: "Generate product", schema: schema)
+  result = AiGuardrails::DSL.run(
+    prompt: "Generate product",
+    schema: schema,
+    provider_config: { api_key: ENV["OPENAI_API_KEY"] }
+  )
 rescue AiGuardrails::AutoCorrection::RetryLimitReached => e
   puts "Retries exceeded: #{e.message}"
 rescue AiGuardrails::SafetyFilter::UnsafeContentError => e
