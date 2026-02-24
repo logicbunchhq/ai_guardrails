@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.email = ["faisalraza.p@gmail.com"]
   spec.metadata["organization"] = "LogicBunch"
 
-  spec.summary = "AiGuardrails: Schema validation and safety layer for AI-generated output in Ruby"
+  spec.summary = "Ruby AI Guardrails for LLM output validation, structured JSON, and safety."
   spec.description = <<~DESC
     AiGuardrails is a Ruby gem that helps developers validate, correct, and enforce schemas
     on AI-generated outputs. It ensures structured data, prevents JSON errors, and provides

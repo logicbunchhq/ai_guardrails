@@ -5,8 +5,8 @@ module AiGuardrails
     # Factory returns the right provider client
     class Factory
       PROVIDERS = {
-        openai: OpenAIClient
-        # add :anthropic => AnthropicClient later
+        openai: OpenAIClient,
+        anthropic: AnthropicClient
       }.freeze
 
       def self.build(provider:, config: {})
