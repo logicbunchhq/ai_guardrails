@@ -86,7 +86,7 @@ gem install ai_guardrails
 - Rails >= 6.0 (if using Rails integration)
 - Optional dependencies:
   - `ruby-openai` for OpenAI provider
-  - `ruby-anthropic` gem if using Anthropic provider
+  - `anthropic` gem if using Anthropic provider
 
 ---
 
@@ -245,7 +245,7 @@ AiGuardrails supports **any LLM provider**, with dynamic loading and zero vendor
 | Provider       | Gem              | Status      |
 | -------------- | ---------------- | ----------- |
 | OpenAI         | `ruby-openai`    | ✅ Supported |
-| Anthropic      | `ruby-anthropic` | 🔜 Planned  |
+| Anthropic      | `anthropic`      | ✅ Supported |
 | Google Gemini  | `gemini-ai`      | 🔜 Planned  |
 | Ollama (local) | `ollama-ai`      | 🔜 Planned  |
 
@@ -256,6 +256,15 @@ client = AiGuardrails::Provider::Factory.build(
 )
 
 puts client.call_model(prompt: "Hello!")
+```
+
+```ruby
+client = AiGuardrails::Provider::Factory.build(
+  provider: :anthropic,
+  config: { api_key: ENV["ANTHROPIC_API_KEY"], model: "claude-3-5-sonnet-20241022" }
+)
+
+puts client.call_model(prompt: "Hello from Claude!")
 ```
 
 ---

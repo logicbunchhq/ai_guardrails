@@ -9,6 +9,11 @@ RSpec.describe AiGuardrails::Provider::Factory do
       expect(client).to be_an(AiGuardrails::Provider::OpenAIClient)
     end
 
+    it "returns an AnthropicClient instance" do
+      client = described_class.build(provider: :anthropic, config: { api_key: "test" })
+      expect(client).to be_an(AiGuardrails::Provider::AnthropicClient)
+    end
+
     it "raises error for unknown provider" do
       expect { described_class.build(provider: :unknown) }.to raise_error(ArgumentError, /Unknown provider/)
     end
