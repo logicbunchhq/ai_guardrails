@@ -7,6 +7,18 @@ See [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Placeholder for future changes
 
+## [1.3.0] - 2026-10-06
+### Added
+- Anthropic provider (`AiGuardrails::Provider::AnthropicClient`) via `Provider::Factory.build(provider: :anthropic, ...)`
+- RSpec coverage for Anthropic client and factory
+- README: Anthropic setup and usage example
+
+### Changed
+- Gemspec summary wording (documentation only)
+
+### Fixed
+- None
+
 ## [1.2.0] - 2025-12-12
 ### Added
 - Final improvements and documentation updates
